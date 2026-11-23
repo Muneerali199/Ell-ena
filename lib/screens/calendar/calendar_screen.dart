@@ -344,35 +344,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
         }
 
         final durationMinutes = meetingDurationMinutes(meeting);
-        final endDateTime = meetingDate.add(Duration(minutes: durationMinutes));
-        final endOnStartDay = endDateTime.day == meetingDate.day &&
-            endDateTime.month == meetingDate.month &&
-            endDateTime.year == meetingDate.year;
-        final displayEndTime = endOnStartDay
-            ? TimeOfDay.fromDateTime(endDateTime)
-            : const TimeOfDay(hour: 23, minute: 59);
+        final title = meeting['title'] ?? 'Untitled Meeting';
+        final meetingId = meeting['id'];
 
-        _events[dateOnly]!.add(CalendarEvent(
-          title: meeting['title'] ?? 'Untitled Meeting',
-          startTime: TimeOfDay.fromDateTime(meetingDate),
-          endTime: displayEndTime,
-          type: EventType.meeting,
-          id: meeting['id'],
-        ));
-
-        if (!endOnStartDay) {
-          final nextDay = DateTime(
-            endDateTime.year,
-            endDateTime.month,
-            endDateTime.day,
-          );
-          _events.putIfAbsent(nextDay, () => []).add(CalendarEvent(
-            title: '${meeting['title'] ?? 'Untitled Meeting'} (continued)',
-            startTime: const TimeOfDay(hour: 0, minute: 0),
-            endTime: TimeOfDay.fromDateTime(endDateTime),
-            type: EventType.meeting,
-            id: '${meeting['id']}-continued',
-          ));
+        for (final segment
+            in meetingCalendarSegments(meetingDate, durationMinutes)) {
+          _events.putIfAbsent(segment.day, () => []).add(CalendarEvent(
+                title: segment.continued ? '$title (continued)' : title,
+                startTime: TimeOfDay.fromDateTime(segment.start),
+                endTime: TimeOfDay.fromDateTime(segment.end),
+                type: EventType.meeting,
+                id: segment.continued ? '$meetingId-continued' : meetingId,
+              ));
         }
       }
     }
@@ -626,11 +609,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     switch (event.type) {
       case EventType.meeting:
-        // Navigate to meeting detail screen
+        // Continuation entries carry a display-only suffix; the stored ID is what
+        // MeetingDetailScreen looks up.
+        final meetingId = event.id.replaceFirst(RegExp(r'-continued$'), '');
         result = await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => MeetingDetailScreen(meetingId: event.id),
+            builder: (context) => MeetingDetailScreen(meetingId: meetingId),
           ),
         );
         break;
